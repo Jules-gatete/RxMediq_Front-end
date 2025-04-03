@@ -1,13 +1,25 @@
-import React, { useState } from 'react';
-import { API_ENDPOINTS } from '../config';
-import type { RetrainingResponse } from '../types';
+import React, { useState, useEffect } from 'react';
 import { Upload, AlertCircle, CheckCircle, RefreshCw } from 'lucide-react';
 
 export function RetrainingSection() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<RetrainingResponse | null>(null);
+  const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState<string>('');
+  const [visualizations, setVisualizations] = useState<string[]>([]);
+
+  // Listen for retrain completion event
+  useEffect(() => {
+    const handleRetrainComplete = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      if (customEvent.detail?.visualizations) {
+        setVisualizations(customEvent.detail.visualizations);
+      }
+    };
+
+    window.addEventListener('retrainComplete', handleRetrainComplete);
+    return () => window.removeEventListener('retrainComplete', handleRetrainComplete);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -16,19 +28,20 @@ export function RetrainingSection() {
     setLoading(true);
     setError('');
     setResult(null);
+    setVisualizations([]);
 
     const formData = new FormData();
     formData.append('file', file);
 
     try {
-      const response = await fetch(API_ENDPOINTS.UPLOAD, {
+      const response = await fetch('https://rxmediq-model-api.onrender.com/retrain/', {
         method: 'POST',
         body: formData,
       });
 
       if (!response.ok) throw new Error('Retraining failed');
 
-      const data: RetrainingResponse = await response.json();
+      const data = await response.json();
       setResult(data);
     } catch (err) {
       setError('Failed to retrain model. Please try again.');
@@ -105,30 +118,82 @@ export function RetrainingSection() {
         )}
 
         {result && (
-          <div className="mt-6 p-6 bg-green-50 border border-green-200 rounded-lg animate-fade-in">
-            <div className="flex items-center mb-4">
-              <CheckCircle className="w-6 h-6 text-green-500 mr-2" />
-              <h3 className="text-xl font-medium text-green-900">Retraining Complete</h3>
-            </div>
-            <div className="bg-white rounded-lg p-4 shadow-sm">
-              <p className="text-lg text-green-800">
-                {result.message}
-              </p>
-              <div className="mt-4 flex items-center">
-                <div className="flex-1 bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-green-500 h-2 rounded-full"
-                    style={{ width: `${result.accuracy * 100}%` }}
-                  />
+          <div className="mt-6 space-y-6">
+            <div className="p-6 bg-green-50 border border-green-200 rounded-lg animate-fade-in">
+              <div className="flex items-center mb-4">
+                <CheckCircle className="w-6 h-6 text-green-500 mr-2" />
+                <h3 className="text-xl font-medium text-green-900">Retraining Complete</h3>
+              </div>
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <p className="text-lg text-green-800">{result.message}</p>
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center">
+                    <span className="w-32 text-sm text-gray-600">Accuracy:</span>
+                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-green-500 h-2 rounded-full"
+                        style={{ width: `${result.metrics.accuracy * 100}%` }}
+                      />
+                    </div>
+                    <span className="ml-4 font-semibold text-green-800">
+                      {(result.metrics.accuracy * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="w-32 text-sm text-gray-600">Precision:</span>
+                    <span className="font-semibold text-green-800">
+                      {(result.metrics.precision * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="w-32 text-sm text-gray-600">Recall:</span>
+                    <span className="font-semibold text-green-800">
+                      {(result.metrics.recall * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="w-32 text-sm text-gray-600">F1 Score:</span>
+                    <span className="font-semibold text-green-800">
+                      {(result.metrics.f1_score * 100).toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="flex items-center">
+                    <span className="w-32 text-sm text-gray-600">Dataset Size:</span>
+                    <span className="font-semibold text-green-800">{result.dataset_size} records</span>
+                  </div>
                 </div>
-                <span className="ml-4 font-semibold text-green-800">
-                  {(result.accuracy * 100).toFixed(1)}% Accuracy
-                </span>
               </div>
             </div>
+
+            {/* Visualizations Section */}
+            {visualizations.length > 0 && (
+              <div className="space-y-6">
+                <h3 className="text-2xl font-bold text-gray-900">Training Visualizations</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {visualizations.map((viz, index) => (
+                    <div key={index} className="bg-white p-4 rounded-lg shadow-sm">
+                      <img
+                        src={viz}
+                        alt={`Visualization ${index + 1}`}
+                        className="w-full h-auto rounded"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Not+Available';
+                        }}
+                      />
+                      <p className="mt-2 text-sm text-gray-600 text-center">
+                        {viz.includes('training_history') ? 'Training History' :
+                         viz.includes('confusion_matrix') ? 'Confusion Matrix' :
+                         'Class Distribution'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   );
 }
+

@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { API_ENDPOINTS } from '../config';
-import type { PredictionFormData, PredictionResponse } from '../types';
 import { Brain, AlertCircle, CheckCircle } from 'lucide-react';
 
 export function PredictionForm() {
-  const [formData, setFormData] = useState<PredictionFormData>({
+  const [formData, setFormData] = useState({
     disease: '',
     age: 30,
     gender: 'male',
@@ -21,16 +19,21 @@ export function PredictionForm() {
     setPrediction('');
 
     try {
-      const response = await fetch(API_ENDPOINTS.PREDICT, {
-        method: 'POST',
+      const url = new URL('https://rxmediq-model-api.onrender.com/predict/');
+      url.searchParams.append('disease', formData.disease);
+      url.searchParams.append('age', formData.age.toString());
+      url.searchParams.append('gender', formData.gender);
+      url.searchParams.append('severity', formData.severity);
+
+      const response = await fetch(url, {
+        method: 'GET',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
       });
 
       if (!response.ok) throw new Error('Prediction failed');
 
-      const data: PredictionResponse = await response.json();
-      setPrediction(data.predicted_drug);
+      const data = await response.json();
+      setPrediction(data.prediction);
     } catch (err) {
       setError('Failed to get prediction. Please try again.');
     } finally {
@@ -67,7 +70,7 @@ export function PredictionForm() {
                 <input
                   type="number"
                   min="4"
-                  max="60"
+                  max="120"
                   value={formData.age}
                   onChange={(e) => setFormData({ ...formData, age: parseInt(e.target.value) })}
                   className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
@@ -83,7 +86,7 @@ export function PredictionForm() {
               <label className="block text-sm font-medium text-gray-700">Gender</label>
               <select
                 value={formData.gender}
-                onChange={(e) => setFormData({ ...formData, gender: e.target.value as 'male' | 'female' })}
+                onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
                 className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               >
                 <option value="male">Male</option>
@@ -95,7 +98,7 @@ export function PredictionForm() {
               <label className="block text-sm font-medium text-gray-700">Severity</label>
               <select
                 value={formData.severity}
-                onChange={(e) => setFormData({ ...formData, severity: e.target.value as 'LOW' | 'NORMAL' | 'HIGH' })}
+                onChange={(e) => setFormData({ ...formData, severity: e.target.value })}
                 className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
               >
                 <option value="LOW">Low</option>
@@ -154,3 +157,4 @@ export function PredictionForm() {
     </div>
   );
 }
+

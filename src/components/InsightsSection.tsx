@@ -1,27 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import Plot from 'react-plotly.js';
-import { API_ENDPOINTS } from '../config';
-import type { LiveData } from '../types';
 import { BarChart, LineChart, AlertCircle } from 'lucide-react';
 
 export function InsightsSection() {
-  const [liveData, setLiveData] = useState<LiveData | null>(null);
+  const [visualizations, setVisualizations] = useState<string[]>([]);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchVisualizations = async () => {
       try {
-        const response = await fetch(API_ENDPOINTS.LIVE_DATA);
-        if (!response.ok) throw new Error('Failed to fetch live data');
+        const response = await fetch('https://rxmediq-model-api.onrender.com/visualizations/', {
+          method: 'GET',
+        });
+        if (!response.ok) throw new Error('Failed to fetch visualizations');
         const data = await response.json();
-        setLiveData(data);
-        setError('');
+        if (data.visualizations && data.visualizations.length > 0) {
+          // Prepend the base URL to make the paths absolute
+          const baseUrl = 'https://rxmediq-model-api.onrender.com/';
+          const absolutePaths = data.visualizations.map((path: string) => 
+            path.startsWith('http') ? path : `${baseUrl}${path.replace(/^static\//, 'static/')}`
+          );
+          setVisualizations(absolutePaths);
+          setError('');
+        } else {
+          setError('No visualizations available. Please retrain the model first.');
+        }
       } catch (err) {
-        setError('Failed to fetch live data. Please try again later.');
+        setError('Failed to fetch visualizations. Please retrain the model first.');
       }
     };
 
-    const interval = setInterval(fetchData, 2000);
+    fetchVisualizations();
+    const interval = setInterval(fetchVisualizations, 5000); // Poll every 5 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -40,55 +49,38 @@ export function InsightsSection() {
         </div>
       ) : (
         <div className="grid md:grid-cols-2 gap-8">
-          {liveData && (
+          {visualizations.length > 0 && (
             <>
               <div className="glass-card rounded-xl p-6 animate-fade-in">
                 <div className="flex items-center mb-4">
                   <LineChart className="w-6 h-6 text-indigo-600 mr-2" />
-                  <h3 className="text-xl font-semibold">Age Distribution</h3>
+                  <h3 className="text-xl font-semibold">Training History</h3>
                 </div>
-                <Plot
-                  data={liveData.age_plot.data}
-                  layout={{
-                    ...liveData.age_plot.layout,
-                    autosize: true,
-                    margin: { t: 20, r: 20, b: 40, l: 40 },
-                    paper_bgcolor: 'rgba(0,0,0,0)',
-                    plot_bgcolor: 'rgba(0,0,0,0)',
-                    font: { family: 'Inter, sans-serif' },
-                  }}
-                  useResizeHandler
-                  className="w-full h-[400px]"
-                  config={{ responsive: true }}
-                />
+                <img src={visualizations[0]} alt="Training History" className="w-full h-[400px] object-contain" />
                 <p className="mt-4 text-gray-600 text-sm">
-                  Age distribution reveals demographic patterns in medication preferences,
-                  helping identify age-specific treatment trends.
+                  Shows model accuracy improvement over training epochs.
                 </p>
               </div>
 
               <div className="glass-card rounded-xl p-6 animate-fade-in">
                 <div className="flex items-center mb-4">
                   <BarChart className="w-6 h-6 text-indigo-600 mr-2" />
-                  <h3 className="text-xl font-semibold">Severity vs. Drug Distribution</h3>
+                  <h3 className="text-xl font-semibold">Confusion Matrix</h3>
                 </div>
-                <Plot
-                  data={liveData.severity_plot.data}
-                  layout={{
-                    ...liveData.severity_plot.layout,
-                    autosize: true,
-                    margin: { t: 20, r: 20, b: 40, l: 40 },
-                    paper_bgcolor: 'rgba(0,0,0,0)',
-                    plot_bgcolor: 'rgba(0,0,0,0)',
-                    font: { family: 'Inter, sans-serif' },
-                  }}
-                  useResizeHandler
-                  className="w-full h-[400px]"
-                  config={{ responsive: true }}
-                />
+                <img src={visualizations[1]} alt="Confusion Matrix" className="w-full h-[400px] object-contain" />
                 <p className="mt-4 text-gray-600 text-sm">
-                  This visualization shows the relationship between condition severity
-                  and prescribed medications, highlighting treatment patterns.
+                  Visualizes prediction accuracy across different drug classes.
+                </p>
+              </div>
+
+              <div className="glass-card rounded-xl p-6 animate-fade-in">
+                <div className="flex items-center mb-4">
+                  <BarChart className="w-6 h-6 text-indigo-600 mr-2" />
+                  <h3 className="text-xl font-semibold">Class Distribution</h3>
+                </div>
+                <img src={visualizations[2]} alt="Class Distribution" className="w-full h-[400px] object-contain" />
+                <p className="mt-4 text-gray-600 text-sm">
+                  Displays the distribution of predicted drug classes.
                 </p>
               </div>
             </>
